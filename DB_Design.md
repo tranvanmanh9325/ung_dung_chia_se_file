@@ -1,19 +1,17 @@
-# Thiết kế CSDL cho ứng dụng chia sẻ file
+# Thiết kế CSDL cho ứng dụng chia sẻ file (PostgreSQL 16.0 hoặc mới hơn)
 
-## 1. Thông tin chung
+## 1. Danh sách các bảng
 
-- PostgreSQL (> 16.0)
+### 1.1. ```users```
 
-## 2. Danh sách các bảng
+Bảng này sẽ chứa thông tin người dùng, phục vụ cho việc đăng nhập, đăng ký.
 
-### 2.1. ```users```
-
-Bảng này sẽ chứa thông tin người dùng, phục vụ cho việc đăng nhập, đăng ký
+Với cột ```name```, không được trùng lặp tên user.
 
 ```sql
 CREATE TABLE users (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name VARCHAR(64) NOT NULL,
+    name VARCHAR(64) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
 
     created_at TIMESTAMPZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -21,7 +19,7 @@ CREATE TABLE users (
 );
 ```
 
-### 2.2. ```groups```
+### 1.2. ```groups```
 
 Bảng này chứa các nhóm phục vụ chia sẻ file
 
@@ -40,7 +38,7 @@ CREATE TABLE groups (
 );
 ```
 
-### 2.3. ```users_groups```
+### 1.3. ```users_groups```
 
 Bảng này liên kết 2 bảng ```users``` và ```groups``` theo quan hệ Many-to-Many.
 
@@ -61,7 +59,7 @@ CREATE TABLE users_groups (
 );
 ```
 
-### 2.4. ```entries```
+### 1.4. ```entries```
 
 Bảng này chứa toàn bộ các file và directory index, phân biệt thông qua cột ```type```. 
 
@@ -102,7 +100,7 @@ CREATE TABLE entries (
 );
 ```
 
-### 2.5. ```requests```
+### 1.5. ```requests```
 
 Danh sách các request tham gia một nhóm, chỉ hiển thị với group leader.
 
@@ -129,3 +127,161 @@ CREATE TABLE requests (
         ON DELETE CASCADE
 );
 ```
+
+## 2. Danh sách các lệnh truy vấn
+### 2.1. Truy vấn phục vụ đăng nhập, đăng ký
+#### 1. Kiểm tra username có tồn tại không (cho cả đăng nhập và đăng ký)
+
+```sql
+SELECT EXISTS (
+    SELECT 1
+    FROM users
+    WHERE name = $1;
+);
+```
+
+- ```$1```: Placeholder cho username dùng để truy vấn
+
+
+#### 2. Kiểm tra password có chính xác không (cho đăng nhập)
+
+**CHÚ Ý**: Ở đây ta so sánh 2 string sau khi mã hoá, không so sánh plain text.
+
+```sql
+SELECT EXISTS (
+    SELECT 1
+    FROM users
+    WHERE name = $1
+    AND password = $2;
+);
+```
+
+- ```$1```: Placeholder cho username dùng để truy vấn.
+- ```$2```: Placeholder cho password string sau khi mã hoá.
+
+### 2.2. Truy vấn phục vụ quản lý nhóm chia sẻ file
+#### 1. Lấy toàn bộ các thành viên trong nhóm (hiển thị chung cho cả nhóm)
+
+```sql
+SELECT users.* FROM users
+JOIN users_groups
+    ON users.id = users_groups.user_id
+WHERE users_groups.group_id = $1;
+```
+
+-```$1```: Placeholder cho ID của nhóm chia sẻ từ bảng ```groups```.
+
+#### 2. Lấy toàn bộ các nhóm và người dùng đang ở trong (hiển thị cho người dùng đó)
+
+```sql
+SELECT groups.* FROM groups
+JOIN users_groups
+    ON groups.id = users_groups.group_id
+WHERE users_groups.user_id = $1;
+```
+
+-```$1```: Placeholder cho ID của người dùng từ bảng ```users```.
+
+#### 3. Lấy toàn bộ các yêu cầu tham gia nhóm (chỉ hiển thị với người tạo nhóm)
+
+**CHÚ Ý**: Chỉ hiển thị các yêu cầu đang có trạng thái ```PENDING```.
+
+```sql
+SELECT * FROM requests
+WHERE group_id = $1
+    AND status = 'PENDING';
+```
+
+-```$1```: Placeholder cho ID của nhóm chia sẻ từ bảng ```groups```.
+
+### 2.3. Truy vấn phục vụ hệ thống file
+#### 1. Lấy toàn bộ các file và tệp con ở dưới một tệp
+
+Do ứng dụng sẽ hiển thị từng layer một thay vì hiển thị toàn bộ cây file, chỉ cần chạy 1 hàm truy vấn đơn giản.
+
+Ta chỉ cần chạy lại hàm này khi truy vấn tệp con ở độ sâu tiếp theo.
+
+```sql
+SELECT * FROM entries
+WHERE group_id = $1
+    AND parent_id = $2;
+```
+
+-```$1```: Placeholder cho ID của nhóm chia sẻ từ bảng ```groups```.
+-```$2```: Placeholder cho ID của tệp cha từ chính bảng ```entries```.
+
+
+#### 2. Quay ngược trở lại tệp cha (chỉ hiển thị lựa chọn này nếu tệp hiện tại không phải tệp root của nhóm)
+
+```sql
+SELECT * FROM entries
+WHERE group_id = $2
+    AND parent_id IS NOT DISTINCT FROM (
+        SELECT parent_id
+        FROM entries
+        WHERE id = $1
+            AND group_id = $2
+    );
+```
+
+-```$1```: Placeholder cho ID của tệp mà người dùng đang nhìn thông qua bảng ```entries```.
+-```$2```: Placeholder cho ID của nhóm chia sẻ từ bảng ```groups```.
+
+#### 3. Kiểm tra trùng tên file (không cho phép hai tệp hoặc file có trùng tên)
+
+Hai file không được trùng tên, hai tệp không được trùng tên, 1 file và 1 tệp có thể trùng tên.
+
+```sql
+SELECT EXISTS (
+    SELECT 1
+    FROM entries
+    WHERE group_id = $1
+        AND parent_id IS NOT DISTINCT FROM $2
+        AND name = $3
+        AND type = $4
+);
+```
+
+- ```$1```: Placeholder cho biến ID của nhóm từ bảng ```groups```.
+- ```$2```: Placeholder cho biến ID của tệp cha của entry.
+- ```$3```: Placeholder cho biến tên của file hoặc tệp con
+- ```$4```: Placeholder cho biến loại entry (file hoặc directory)
+
+#### 4. Tạo nhóm mới
+
+Tạo nhóm mới và thực hiện ```INSERT``` vào bảng ```groups```.
+
+```sql
+WITH new_group AS (
+    INSERT INTO groups (name, dir_path, owner_id)
+    VALUES ($1, '', $2)
+    RETURNING id
+)
+UPDATE groups
+SET dir_path = 'root/' || id
+WHERE id = (SELECT id FROM new_group)
+RETURNING *;
+```
+
+- ```$1```: Placeholder cho biến name của nhóm muốn tạo.
+- ```$2```: Placeholder cho biến ID của người tạo nhóm.
+
+
+## 3. Quy ước chung
+### 3.1. Đường dẫn file
+
+Sử dụng một tệp cha chung đặt tên là ```root/``` cho toàn server.
+
+Mỗi nhóm có một tệp con đặt ngay dưới tệp cha chung. Ví dụ: ```root/1```, ```root/2```,.... Những tệp này được gọi là **tệp gốc của nhóm**.
+
+Sử dụng ```id``` của nhóm thay vì sử dụng ```name``` để tránh việc hai nhóm trùng tên sử dụng chung một không gian lưu trữ.
+
+**Không** sử dụng trực tiếp đường dẫn file khi thực hiện request download hoặc upload, sử dụng id trong CSDL và truy vấn cột ```path``` từ đó để lấy nội dung file.
+
+**CHÚ Ý**: TOÀN BỘ các entry nên có đường dẫn xuất phát từ ```root``` để thuận tiện trong việc truy vấn cây file để lấy nội dung file.
+
+### 3.2. Quy ước trong cơ sở dữ liệu
+
+Một tệp nằm ở chính **tệp gốc của nhóm** nếu ```parent_id``` của tệp đó có giá trị là ```NULL```.
+
+Ví dụ: Nếu tệp ```text.txt``` nằm ở ```root/1/text.txt``` thì ```parent_id``` của entry ứng với nó là ```NULL```.
