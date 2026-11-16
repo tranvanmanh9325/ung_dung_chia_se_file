@@ -1,2 +1,11 @@
 # Prompt giao việc cho agent, không đưa lên GitHub
 prompts/
+bin/
+build/
+*.o
+.env
+storage/
+*.gcno
+*.gcda
+*.gcov
+coverage/
