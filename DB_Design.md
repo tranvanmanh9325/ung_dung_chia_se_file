@@ -266,6 +266,30 @@ RETURNING *;
 - ```$1```: Placeholder cho biến name của nhóm muốn tạo.
 - ```$2```: Placeholder cho biến ID của người tạo nhóm.
 
+#### 5. Tạo entry mới
+
+```sql
+INSERT INTO entries (
+    name, type, path, uploader_id, group_id, parent_id
+)
+SELECT
+    $1,
+    $2,
+    parent.path || '/' || $1,
+    $3,
+    parent.group_id,
+    parent.id
+FROM entries AS parent
+WHERE parent.id = $4
+    AND parent.group_id = $5
+    AND parent.type = 'DIRECTORY'
+RETURNING *;
+```
+
+- ```$1```: Placeholder cho biến tên file muốn upload hoặc thư mục con muốn tạo
+- ```$2```: Placeholder cho biến loại entry (là ```FILE``` nếu upload file, ```DIRECTORY``` nếu tạo thư mục mới)
+- ```$3```: Placeholder cho biến ID của người upload file hoặc tạo thư mục con
+
 
 ## 3. Quy ước chung
 ### 3.1. Đường dẫn file
