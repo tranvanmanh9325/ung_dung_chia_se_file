@@ -1,5 +1,5 @@
-#ifndef USER_H
-#define USER_H
+#ifndef MODELS_H
+#define MODELS_H
 
 // 1 UTF-8 character = 4 bytes
 #define VARCHAR(n) ((n) * 4 + 1)
@@ -8,8 +8,6 @@
 typedef struct {
     long id;
     char name[VARCHAR(64)];
-    char password[VARCHAR(255)];
-
     char created_at[64];
     char last_login_at[64];
 } User;
