@@ -171,7 +171,7 @@ WHERE users_groups.group_id = $1;
 
 -```$1```: Placeholder cho ID của nhóm chia sẻ từ bảng ```groups```.
 
-#### 2. Lấy toàn bộ các nhóm và người dùng đang ở trong (hiển thị cho người dùng đó)
+#### 2. Lấy toàn bộ các nhóm mà người dùng đang ở trong (hiển thị cho người dùng đó)
 
 ```sql
 SELECT groups.* FROM groups
