@@ -184,7 +184,94 @@ RETURNING last_login_at;
 
 ### 2.2. Truy vấn phục vụ quản lý nhóm chia sẻ file
 
-#### 1. Tạo nhóm mới và tự động thêm trưởng nhóm vào `users_groups`
+```sql
+SELECT users.* FROM users
+JOIN users_groups
+    ON users.id = users_groups.user_id
+WHERE users_groups.group_id = $1;
+```
+
+-```$1```: Placeholder cho ID của nhóm chia sẻ từ bảng ```groups```.
+
+#### 2. Lấy toàn bộ các nhóm mà người dùng đang ở trong (hiển thị cho người dùng đó)
+
+```sql
+SELECT groups.* FROM groups
+JOIN users_groups
+    ON groups.id = users_groups.group_id
+WHERE users_groups.user_id = $1;
+```
+
+-```$1```: Placeholder cho ID của người dùng từ bảng ```users```.
+
+#### 3. Lấy toàn bộ các yêu cầu tham gia nhóm (chỉ hiển thị với người tạo nhóm)
+
+**CHÚ Ý**: Chỉ hiển thị các yêu cầu đang có trạng thái ```PENDING```.
+
+```sql
+SELECT * FROM requests
+WHERE group_id = $1
+    AND status = 'PENDING';
+```
+
+-```$1```: Placeholder cho ID của nhóm chia sẻ từ bảng ```groups```.
+
+### 2.3. Truy vấn phục vụ hệ thống file
+#### 1. Lấy toàn bộ các file và tệp con ở dưới một tệp
+
+Do ứng dụng sẽ hiển thị từng layer một thay vì hiển thị toàn bộ cây file, chỉ cần chạy 1 hàm truy vấn đơn giản.
+
+Ta chỉ cần chạy lại hàm này khi truy vấn tệp con ở độ sâu tiếp theo.
+
+```sql
+SELECT * FROM entries
+WHERE group_id = $1
+    AND parent_id = $2;
+```
+
+-```$1```: Placeholder cho ID của nhóm chia sẻ từ bảng ```groups```.
+-```$2```: Placeholder cho ID của tệp cha từ chính bảng ```entries```.
+
+
+#### 2. Quay ngược trở lại tệp cha (chỉ hiển thị lựa chọn này nếu tệp hiện tại không phải tệp root của nhóm)
+
+```sql
+SELECT * FROM entries
+WHERE group_id = $2
+    AND parent_id IS NOT DISTINCT FROM (
+        SELECT parent_id
+        FROM entries
+        WHERE id = $1
+            AND group_id = $2
+    );
+```
+
+-```$1```: Placeholder cho ID của tệp mà người dùng đang nhìn thông qua bảng ```entries```.
+-```$2```: Placeholder cho ID của nhóm chia sẻ từ bảng ```groups```.
+
+#### 3. Kiểm tra trùng tên file (không cho phép hai tệp hoặc file có trùng tên)
+
+Hai file không được trùng tên, hai tệp không được trùng tên, 1 file và 1 tệp có thể trùng tên.
+
+```sql
+SELECT EXISTS (
+    SELECT 1
+    FROM entries
+    WHERE group_id = $1
+        AND parent_id IS NOT DISTINCT FROM $2
+        AND name = $3
+        AND type = $4
+);
+```
+
+- ```$1```: Placeholder cho biến ID của nhóm từ bảng ```groups```.
+- ```$2```: Placeholder cho biến ID của tệp cha của entry.
+- ```$3```: Placeholder cho biến tên của file hoặc tệp con
+- ```$4```: Placeholder cho biến loại entry (file hoặc directory)
+
+#### 4. Tạo nhóm mới
+
+Tạo nhóm mới và thực hiện ```INSERT``` vào bảng ```groups```.
 
 ```sql
 WITH new_group AS (
