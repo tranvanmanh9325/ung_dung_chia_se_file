@@ -1,5 +1,5 @@
-#ifndef FILESHARE_DB_H
-#define FILESHARE_DB_H
+#ifndef DB_H
+#define DB_H
 
 #include <libpq-fe.h>
 #include <stdbool.h>
@@ -243,4 +243,4 @@ db_status_t db_entry_delete(PGconn *conn,
                             int64_t leader_id,
                             db_entry_t *out_deleted);
 
-#endif /* FILESHARE_DB_H */
+#endif /* DB_H */

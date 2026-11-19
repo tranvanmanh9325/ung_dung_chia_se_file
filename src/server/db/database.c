@@ -25,27 +25,37 @@ void db_disconnect(PGconn *conn) {
     }
 }
 
-PGresult* db_execute(PGconn *conn, const char *query, int param_count, const char *params[]) {
+void db_execute(PGconn* conn, const char* query, int param_count, const char* params[], PGresult** result) {
+    if (result == NULL)
+        return DB_EXECUTE_FAILED;
+
+    *result = NULL;
+
     if (conn == NULL || query == NULL) {
-        return NULL;
+        return DB_EXECUTE_FAILED;
     }
 
-    PGresult *result = PQexecParams(conn, query, param_count, NULL, params, NULL, NULL, 0);
+    *result = PQexecParams(conn, query, param_count, NULL, params, NULL, NULL, 0);
 
-    if (result == NULL) {
-        fprintf(stderr, "[DB] Query execution failed: %s\n", PQerrorMessage(conn));
-        return NULL;
+    if (*result == NULL) {
+        fprintf(stderr, "[DB] Query execution failed: %s\n",
+                PQerrorMessage(conn));
+        return DB_EXECUTE_FAILED;
     }
 
-    ExecStatusType status = PQresultStatus(result);
+    ExecStatusType status = PQresultStatus(*result);
 
     if (status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK) {
-        fprintf(stderr, "[DB] Query failed: %s\n", PQresultErrorMessage(result));
-        PQclear(result);
-        return NULL;
+
+        fprintf(stderr, "[DB] Query failed: %s\n", PQresultErrorMessage(*result));
+
+        PQclear(*result);
+        *result = NULL;
+
+        return DB_EXECUTE_FAILED;
     }
 
-    return result;
+    return DB_EXECUTE_SUCCESS;
 }
 
 

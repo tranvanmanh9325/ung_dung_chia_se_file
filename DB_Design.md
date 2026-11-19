@@ -184,8 +184,10 @@ RETURNING last_login_at;
 
 ### 2.2. Truy vấn phục vụ quản lý nhóm chia sẻ file
 
+#### 1. Lấy toàn bộ danh sách thành viên của nhóm
+
 ```sql
-SELECT users.* FROM users
+SELECT id, name, last_login_at FROM users
 JOIN users_groups
     ON users.id = users_groups.user_id
 WHERE users_groups.group_id = $1;
