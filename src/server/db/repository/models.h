@@ -28,6 +28,8 @@ typedef struct {
     long uploader_id;       // FK to User.id
     long group_id;          // FK to Group.id
     long parent_id;         // FK to Entry.id of the same group
+
+    char uploaded_at[65];
 } Entry;
 
 typedef struct {

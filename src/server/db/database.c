@@ -25,7 +25,7 @@ void db_disconnect(PGconn *conn) {
     }
 }
 
-void db_execute(PGconn* conn, const char* query, int param_count, const char* params[], PGresult** result) {
+Status db_execute(PGconn* conn, const char* query, int param_count, const char* params[], PGresult** result) {
     if (result == NULL)
         return DB_EXECUTE_FAILED;
 

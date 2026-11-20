@@ -16,6 +16,6 @@ PGconn* db_connect(void);
 void db_disconnect(PGconn* conn);
 
 // Execute a query with number of params
-Status db_execute(PGconn *conn, const char *query, int param_count, const char *params[], PGresult* result);
+Status db_execute(PGconn* conn, const char* query, int param_count, const char* params[], PGresult** result);
 
 #endif
