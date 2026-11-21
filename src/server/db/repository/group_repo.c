@@ -109,3 +109,18 @@ void process_request(PGconn* conn, long request_id, const char* action) {
 
     PQclear(result);
 }
+
+void remove_user_from_group(PGconn* conn, long user_id, long group_id) {
+    char user_id_str[32];
+    char group_id_str[32];
+    snprintf(user_id_str, sizeof(user_id_str), "%ld", user_id);
+    snprintf(group_id_str, sizeof(group_id_str), "%ld", group_id);
+
+    const char* params[] = { user_id_str, group_id_str };
+    PGresult* result = NULL;
+
+    if (db_execute(conn, QUERY_REMOVE_USER_FROM_GROUP, 2, params, &result) == DB_EXECUTE_FAILED)
+        return;
+
+    PQclear(result);
+}

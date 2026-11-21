@@ -32,10 +32,16 @@ static const char* QUERY_PROCESS_REQUEST =
     "WHERE $1 = 'ACCEPTED' "
     "RETURNING user_id;";
 
+static const char* QUERY_REMOVE_USER_FROM_GROUP =
+    "DELETE FROM users_groups "
+    "WHERE user_id = $1 AND group_id = $2; "
+    "RETURNING user_id, group_id;";
+
 
 void get_all_group_members(PGconn* conn, long group_id, User** members);
 void get_all_groups_of_user(PGconn* conn, long user_id, Group** groups);
 void get_all_pending_requests(PGconn* conn, long group_id, Request** requests);
 void process_request(PGconn* conn, long request_id, const char* action);
+void remove_user_from_group(PGconn* conn, long user_id, long group_id);
 
 #endif
